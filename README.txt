@@ -12,11 +12,6 @@ Client Project — Live Production Deployment
 Live Website:
 https://aaadosry.info/fourmap4/
 
-Mobile Apps:
-- App Store
-- Google Play
-
----
 
 ## Overview
 
@@ -103,16 +98,6 @@ lang/
 
 ---
 
-## Running Locally
-
-1. Clone the repository
-2. Place inside htdocs (XAMPP) or www
-3. Import database file into phpMyAdmin
-4. Update database credentials in includes/db.php
-5. Access via http://localhost/fourmap-website
-
----
-
 ## Developer
 
 Karim Mohamed  
@@ -123,3 +108,4 @@ https://kaghim.vercel.app/
 
 GitHub:
 https://github.com/karrim0
+
