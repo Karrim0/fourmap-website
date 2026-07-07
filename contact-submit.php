@@ -7,6 +7,9 @@
  * Validates input, sends email, redirects with status
  */
 
+require_once 'includes/db.php';
+require_once 'includes/settings.php';
+
 /* -----------------------------------------------
    Only allow POST requests
    ----------------------------------------------- */
@@ -19,7 +22,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
    Honeypot anti-spam check
    ----------------------------------------------- */
 if (!empty($_POST['website'])) {
-    // Silently redirect as success (bot trapped)
     header('Location: contact.php?status=success');
     exit;
 }
@@ -47,7 +49,6 @@ $message = clean_input($_POST['message'] ?? '');
    ----------------------------------------------- */
 $errors = [];
 
-// Name: required, min 2 chars, max 100
 if (empty($name)) {
     $errors[] = 'الاسم مطلوب.';
 } elseif (mb_strlen($name, 'UTF-8') < 2) {
@@ -56,24 +57,20 @@ if (empty($name)) {
     $errors[] = 'الاسم طويل جداً.';
 }
 
-// Phone: required, must match Saudi/international pattern
 if (empty($phone)) {
     $errors[] = 'رقم الجوال مطلوب.';
 } elseif (!preg_match('/^[\d\s\+\-\(\)]{7,20}$/', $phone)) {
     $errors[] = 'رقم الجوال غير صحيح.';
 }
 
-// Email: optional but validate format if provided
 if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     $errors[] = 'البريد الإلكتروني غير صحيح.';
 }
 
-// Email max length
 if (mb_strlen($email, 'UTF-8') > 150) {
     $errors[] = 'البريد الإلكتروني طويل جداً.';
 }
 
-// Message: required, min 10 chars, max 2000
 if (empty($message)) {
     $errors[] = 'الرسالة مطلوبة.';
 } elseif (mb_strlen($message, 'UTF-8') < 10) {
@@ -82,27 +79,27 @@ if (empty($message)) {
     $errors[] = 'الرسالة طويلة جداً (الحد الأقصى 2000 حرف).';
 }
 
-/* -----------------------------------------------
-   If validation fails, redirect back with error
-   ----------------------------------------------- */
 if (!empty($errors)) {
-    // Store errors in session (optional) or redirect with generic message
-    // For simplicity, redirect with validation status
     header('Location: contact.php?status=validation');
+    exit;
+}
+
+/* -----------------------------------------------
+   Recipient Email from Admin Panel (DB)
+   ----------------------------------------------- */
+$to = get_setting($pdo, 'contact_email', '');
+
+// لازم يكون موجود وصحيح
+if (empty($to) || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+    header('Location: contact.php?status=error');
     exit;
 }
 
 /* -----------------------------------------------
    Prepare Email
    ----------------------------------------------- */
-
-// Recipient email — change to your actual address
-$to = 'info@fourmap.sa';
-
-// Subject
 $subject = 'رسالة جديدة من موقع فور ماب - ' . $name;
 
-// Email body (plain text, UTF-8)
 $body  = "رسالة جديدة من نموذج التواصل في موقع فور ماب\n";
 $body .= "==============================================\n\n";
 $body .= "الاسم: "   . $name  . "\n";
@@ -113,9 +110,8 @@ $body .= "----------\n";
 $body .= $message . "\n\n";
 $body .= "==============================================\n";
 $body .= "تاريخ الإرسال: " . date('Y-m-d H:i:s') . "\n";
-$body .= "عنوان IP: " . $_SERVER['REMOTE_ADDR'] . "\n";
+$body .= "عنوان IP: " . ($_SERVER['REMOTE_ADDR'] ?? '-') . "\n";
 
-// Email headers
 $headers  = 'MIME-Version: 1.0' . "\r\n";
 $headers .= 'Content-Type: text/plain; charset=UTF-8' . "\r\n";
 $headers .= 'Content-Transfer-Encoding: 8bit' . "\r\n";
@@ -126,26 +122,22 @@ $headers .= 'X-Mailer: PHP/' . phpversion() . "\r\n";
 /* -----------------------------------------------
    Attempt to Send Email
    ----------------------------------------------- */
-// On shared hosting, mail() usually works.
-// On XAMPP/local, it may not send but will return true.
 $mail_sent = @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
 
 /* -----------------------------------------------
-   Optional: Log submissions to a file
-   (comment out in production if not needed)
+   Log submissions
    ----------------------------------------------- */
 $log_dir  = __DIR__ . '/logs';
 $log_file = $log_dir . '/contact_submissions.log';
 
-// Create logs directory if it doesn't exist
 if (!is_dir($log_dir)) {
     @mkdir($log_dir, 0755, true);
-    // Protect the directory
     @file_put_contents($log_dir . '/.htaccess', "Deny from all\n");
 }
 
 $log_entry  = '[' . date('Y-m-d H:i:s') . '] ';
-$log_entry .= 'IP: ' . $_SERVER['REMOTE_ADDR'] . ' | ';
+$log_entry .= 'IP: ' . ($_SERVER['REMOTE_ADDR'] ?? '-') . ' | ';
+$log_entry .= 'To: ' . $to . ' | ';
 $log_entry .= 'Name: ' . $name . ' | ';
 $log_entry .= 'Phone: ' . $phone . ' | ';
 $log_entry .= 'Email: ' . ($email ?: '-') . ' | ';
@@ -154,16 +146,7 @@ $log_entry .= 'Mail sent: ' . ($mail_sent ? 'YES' : 'NO') . "\n";
 @file_put_contents($log_file, $log_entry, FILE_APPEND | LOCK_EX);
 
 /* -----------------------------------------------
-   Redirect with success status
-   (Even if mail fails, show success to user —
-    the log file retains the submission data)
+   Redirect
    ----------------------------------------------- */
-if ($mail_sent) {
-    header('Location: contact.php?status=success');
-} else {
-    // Mail failed but we still logged it
-    // On local/XAMPP this is expected — treat as success
-    header('Location: contact.php?status=success');
-}
-
+header('Location: contact.php?status=' . ($mail_sent ? 'success' : 'error'));
 exit;

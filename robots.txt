@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# صفحات الأدمن — ممنوعة على محركات البحث
+Disallow: /admin/
+Disallow: /includes/
+Disallow: /database/
+Disallow: /uploads/
+
+# Sitemap
+Sitemap: https://aaadosry.info/fourmap4/sitemap.php
