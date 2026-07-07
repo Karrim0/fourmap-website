@@ -4,7 +4,7 @@
 $host = "sql112.infinityfree.com";
 $dbname = "if0_42356234_fourmap";
 $username = "if0_42356234";
-$password = "";
+$password = "xnjSCh0tE1vF";
 
 try {
     $pdo = new PDO(
