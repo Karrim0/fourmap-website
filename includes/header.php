@@ -1,133 +1,270 @@
 <?php
 /**
  * FourMap - Header Include
- * Sticky RTL navigation bar
+ * Transparent nav + Dynamic SEO from DB
  */
 
-// Set defaults if page variables not provided
-if (!isset($pageTitle)) {
-    $pageTitle = 'فور ماب - مكتبك الهندسي المتنقل';
-}
-if (!isset($pageDesc)) {
-    $pageDesc = 'فور ماب هو مكتبك الهندسي المتنقل - جميع خدماتك الهندسية بين يديك، في أي وقت وأي مكان.';
-}
-if (!isset($pageKeywords)) {
-    $pageKeywords = 'فور ماب, هندسة, خدمات هندسية, مكتب هندسي, تطبيق هندسي, المملكة العربية السعودية';
+// ===== Language Session =====
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+if (isset($_GET['lang']) && in_array($_GET['lang'], ['ar', 'en'])) {
+    $_SESSION['lang'] = $_GET['lang'];
+    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+    exit;
 }
 
-// Get current page for active state
+$lang        = $_SESSION['lang'] ?? 'ar';
+$dir         = $lang === 'ar' ? 'rtl' : 'ltr';
+$htmlLang    = $lang;
+$switchLang  = $lang === 'ar' ? 'en' : 'ar';
+$switchLabel = $lang === 'ar' ? 'EN' : 'ع';
+$switchTitle = $lang === 'ar' ? 'English' : 'عربي';
+
 $currentPage = basename($_SERVER['PHP_SELF']);
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/settings.php';
+
+// ===== SEO — يتحدد من كل صفحة أو يسحب من DB =====
+// كل صفحة بتحدد $seoPage قبل include header
+// مثال: $seoPage = 'home'; في index.php
+if (!isset($seoPage)) {
+    $map = [
+        'index.php'        => 'home',
+        'about.php'        => 'about',
+        'services.php'     => 'services',
+        'contact.php'      => 'contact',
+        'consultation.php' => 'consultation',
+        'articles.php'     => 'articles',
+        'article.php'      => 'article',
+    ];
+    $seoPage = $map[$currentPage] ?? 'home';
+}
+
+// سحب SEO من DB — مع fallback لو الحقل فاضي
+// article مش بيسحب من DB — SEO بيجي من المقال نفسه
+if ($seoPage !== 'article') {
+    $seoTitle       = get_setting($pdo, "seo_{$seoPage}_title",       '');
+    $seoDescription = get_setting($pdo, "seo_{$seoPage}_description", '');
+    $seoKeywords    = get_setting($pdo, "seo_{$seoPage}_keywords",    '');
+} else {
+    $seoTitle       = '';
+    $seoDescription = '';
+    $seoKeywords    = '';
+}
+
+// Fallback defaults لو لسه ما اتملتش من لوحة التحكم
+$defaults = [
+    'home' => [
+        'title'       => 'فور ماب - مكتبك الهندسي المتنقل',
+        'description' => 'فور ماب منصة هندسية رقمية تقدم خدمات إصدار الرخص والتصاميم والإشراف الهندسي في المملكة العربية السعودية.',
+        'keywords'    => 'فور ماب, خدمات هندسية, رخص بناء, تصاميم معمارية, المملكة العربية السعودية',
+    ],
+    'about' => [
+        'title'       => 'من نحن - فور ماب',
+        'description' => 'تعرف على فور ماب، المنصة الهندسية الرقمية الرائدة في المملكة العربية السعودية.',
+        'keywords'    => 'من نحن, فور ماب, مكتب هندسي, خدمات هندسية',
+    ],
+    'services' => [
+        'title'       => 'خدماتنا - فور ماب',
+        'description' => 'اكتشف خدمات فور ماب الهندسية: رخص البناء، التصاميم المعمارية، الإشراف الهندسي والاستشارات.',
+        'keywords'    => 'خدمات هندسية, رخص بناء, تصاميم, إشراف هندسي, فور ماب',
+    ],
+    'contact' => [
+        'title'       => 'تواصل معنا - فور ماب',
+        'description' => 'تواصل مع فريق فور ماب للحصول على خدماتك الهندسية.',
+        'keywords'    => 'تواصل, فور ماب, استفسار, خدمات هندسية',
+    ],
+    'consultation' => [
+        'title'       => 'طلب استشارة - فور ماب',
+        'description' => 'احصل على استشارة هندسية متخصصة من فريق فور ماب المعتمد.',
+        'keywords'    => 'استشارة هندسية, فور ماب, مهندس معتمد',
+    ],
+    'articles' => [
+        'title'       => 'المقالات الهندسية - فور ماب',
+        'description' => 'مقالات هندسية متخصصة من فريق فور ماب في المملكة العربية السعودية.',
+        'keywords'    => 'مقالات هندسية, فور ماب, مقالات بناء, استشارات هندسية',
+    ],
+];
+
+if ($seoPage !== 'article') {
+    if (empty($seoTitle))       $seoTitle       = $defaults[$seoPage]['title']       ?? 'فور ماب';
+    if (empty($seoDescription)) $seoDescription = $defaults[$seoPage]['description'] ?? '';
+    if (empty($seoKeywords))    $seoKeywords    = $defaults[$seoPage]['keywords']    ?? '';
+}
+
+// SEO المقال الواحد — يجي من $articleSeo اللي بتتحدد في article.php
+if ($seoPage === 'article' && isset($articleSeo)) {
+    $seoTitle       = $articleSeo['title']       ?? 'فور ماب';
+    $seoDescription = $articleSeo['description'] ?? '';
+    $seoKeywords    = '';
+}
+
+// Fallback أخير لو article.php ما حددش $articleSeo
+if ($seoPage === 'article' && empty($seoTitle)) {
+    $seoTitle = 'مقال هندسي - فور ماب';
+}
+
+// دعم override يدوي من الصفحة نفسها (للصفحات الخاصة)
+if (isset($pageTitle))    $seoTitle       = $pageTitle;
+if (isset($pageDesc))     $seoDescription = $pageDesc;
+if (isset($pageKeywords)) $seoKeywords    = $pageKeywords;
+
+// Logo
+$siteLogo = get_setting($pdo, 'site_logo', 'assets/images/thislogo.png');
+
+// Canonical URL
+$protocol  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$canonical = $protocol . '://' . $_SERVER['HTTP_HOST'] . strtok($_SERVER['REQUEST_URI'], '?');
+
+// OG Image — للمقال بيستخدم صورة المقال لو موجودة
+$ogImage = $protocol . '://' . $_SERVER['HTTP_HOST'] . '/assets/images/thislogo.png';
+if ($seoPage === 'article' && isset($articleSeo['image']) && !empty($articleSeo['image'])) {
+    $ogImage = $articleSeo['image'];
+}
+
+// ===== Tracking IDs — تُسحب من DB مرة واحدة =====
+$fbPixel   = get_setting($pdo, 'facebook_pixel',        '');
+$gaId      = get_setting($pdo, 'google_analytics',      '');
+$gscVerify = get_setting($pdo, 'google_search_console', '');
 ?>
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="<?php echo $htmlLang; ?>" dir="<?php echo $dir; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="index, follow">
-    <meta name="theme-color" content="#222222">
+    <meta name="theme-color" content="#f5c518">
 
-    <!-- SEO Meta Tags -->
-    <title><?php echo htmlspecialchars($pageTitle); ?></title>
-    <meta name="description" content="<?php echo htmlspecialchars($pageDesc); ?>">
-    <meta name="keywords" content="<?php echo htmlspecialchars($pageKeywords); ?>">
+    <!-- ===== SEO Core ===== -->
+    <title><?php echo htmlspecialchars($seoTitle); ?></title>
+    <meta name="description" content="<?php echo htmlspecialchars($seoDescription); ?>">
+    <meta name="keywords"    content="<?php echo htmlspecialchars($seoKeywords); ?>">
+    <link rel="canonical"    href="<?php echo htmlspecialchars($canonical); ?>">
 
-    <!-- Open Graph -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="<?php echo htmlspecialchars($pageTitle); ?>">
-    <meta property="og:description" content="<?php echo htmlspecialchars($pageDesc); ?>">
-    <meta property="og:locale" content="ar_SA">
-    <meta property="og:site_name" content="فور ماب">
+    <!-- ===== Open Graph ===== -->
+    <meta property="og:type"        content="<?php echo $seoPage === 'article' ? 'article' : 'website'; ?>">
+    <meta property="og:title"       content="<?php echo htmlspecialchars($seoTitle); ?>">
+    <meta property="og:description" content="<?php echo htmlspecialchars($seoDescription); ?>">
+    <meta property="og:url"         content="<?php echo htmlspecialchars($canonical); ?>">
+    <meta property="og:locale"      content="<?php echo $lang === 'ar' ? 'ar_SA' : 'en_US'; ?>">
+    <meta property="og:site_name"   content="فور ماب | FourMap">
+    <meta property="og:image"       content="<?php echo htmlspecialchars($ogImage); ?>">
 
-    <!-- Google Fonts: Cairo -->
+    <!-- ===== Twitter Card ===== -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="<?php echo htmlspecialchars($seoTitle); ?>">
+    <meta name="twitter:description" content="<?php echo htmlspecialchars($seoDescription); ?>">
+    <meta name="twitter:image"       content="<?php echo htmlspecialchars($ogImage); ?>">
+
+    <!-- ===== Favicon ===== -->
+    <link rel="icon" type="image/x-icon" href="assets/images/thislogo.png">
+
+    <!-- ===== Fonts ===== -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Stylesheet -->
+    <!-- ===== Styles ===== -->
     <link rel="stylesheet" href="assets/css/style.css">
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="assets/images/logo-map.png">
-</head>
-<body>
+    <!-- ===== Google Search Console Verification ===== -->
+    <?php if (!empty($gscVerify)): ?>
+    <meta name="google-site-verification" content="<?php echo htmlspecialchars($gscVerify); ?>">
+    <?php endif; ?>
 
-<!-- SITE HEADER / NAVIGATION -->
+    <!-- ===== Google Analytics ===== -->
+    <?php if (!empty($gaId)): ?>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=<?php echo htmlspecialchars($gaId); ?>"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '<?php echo htmlspecialchars($gaId); ?>');
+    </script>
+    <?php endif; ?>
+
+</head>
+<body class="<?php echo ($currentPage === 'index.php') ? 'is-home' : 'is-inner'; ?>">
+
+<!-- ===== Facebook Pixel ===== -->
+<?php if (!empty($fbPixel)): ?>
+<script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window,document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '<?php echo htmlspecialchars($fbPixel); ?>');
+    fbq('track', 'PageView');
+</script>
+<noscript>
+    <img height="1" width="1" style="display:none"
+         src="https://www.facebook.com/tr?id=<?php echo htmlspecialchars($fbPixel); ?>&ev=PageView&noscript=1"/>
+</noscript>
+<?php endif; ?>
+
 <header class="site-header" id="site-header">
     <div class="container">
-        <nav class="nav-inner" role="navigation" aria-label="القائمة الرئيسية">
+        <nav class="nav-inner" role="navigation">
 
-            <!-- Logo -->
+            <!-- LOGO -->
             <div class="nav-logo">
-                <a href="index.php" aria-label="الصفحة الرئيسية - فور ماب">
-                    <img src="assets/images/thislogo.png"
-                         alt="شعار فور ماب"
-                         width="46"
-                         height="46"
+                <a href="index.php">
+                    <img src="<?php echo htmlspecialchars($siteLogo); ?>"
+                         alt="FourMap Logo"
+                         width="46" height="46"
                          onerror="this.style.display='none'">
                 </a>
             </div>
 
-            <!-- Center Menu -->
-            <ul class="nav-menu" role="menubar">
-                <li role="none">
-                    <a href="index.php"
-                       role="menuitem"
-                       <?php if ($currentPage === 'index.php') echo 'class="active" aria-current="page"'; ?>>
-                        الرئيسية
+            <!-- CENTER MENU -->
+            <ul class="nav-menu" id="nav-menu" role="menubar">
+                <li>
+                    <a href="index.php" <?php if ($currentPage === 'index.php') echo 'class="active"'; ?>>
+                        <?php echo $lang === 'ar' ? 'الرئيسية' : 'Home'; ?>
                     </a>
                 </li>
-                <li role="none">
-                    <a href="about.php"
-                       role="menuitem"
-                       <?php if ($currentPage === 'about.php') echo 'class="active" aria-current="page"'; ?>>
-                        من نحن
+                <li>
+                    <a href="about.php" <?php if ($currentPage === 'about.php') echo 'class="active"'; ?>>
+                        <?php echo $lang === 'ar' ? 'من نحن' : 'About Us'; ?>
                     </a>
                 </li>
-                <li role="none">
-                    <a href="services.php"
-                       role="menuitem"
-                       <?php if ($currentPage === 'services.php') echo 'class="active" aria-current="page"'; ?>>
-                        خدماتنا
+                <li>
+                    <a href="services.php" <?php if ($currentPage === 'services.php') echo 'class="active"'; ?>>
+                        <?php echo $lang === 'ar' ? 'خدماتنا' : 'Services'; ?>
                     </a>
                 </li>
-                <li role="none">
-                    <a href="contact.php"
-                       role="menuitem"
-                       <?php if ($currentPage === 'contact.php') echo 'class="active" aria-current="page"'; ?>>
-                        تواصل معنا
+                <li>
+                    <a href="articles.php" <?php if (in_array($currentPage, ['articles.php', 'article.php'])) echo 'class="active"'; ?>>
+                        <?php echo $lang === 'ar' ? 'المقالات' : 'Articles'; ?>
+                    </a>
+                </li>
+                <li>
+                    <a href="contact.php" <?php if ($currentPage === 'contact.php') echo 'class="active"'; ?>>
+                        <?php echo $lang === 'ar' ? 'تواصل معنا' : 'Contact'; ?>
+                    </a>
+                </li>
+                <li>
+                    <a href="consultation.php" <?php if ($currentPage === 'consultation.php') echo 'class="active"'; ?>>
+                        <?php echo $lang === 'ar' ? 'طلب استشارة' : 'Consultation'; ?>
                     </a>
                 </li>
             </ul>
 
-            <!-- Social Icons + Hamburger -->
-            <div style="display:flex; align-items:center; gap:12px;">
-
-                <!-- Social Icons -->
-                <div class="nav-social" aria-label="روابط التواصل الاجتماعي">
-                    <a href="#" aria-label="تويتر" target="_blank" rel="noopener noreferrer">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L2.25 2.25h6.865l4.249 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                        </svg>
-                    </a>
-                    <a href="#" aria-label="انستغرام" target="_blank" rel="noopener noreferrer">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                        </svg>
-                    </a>
-                    <a href="#" aria-label="لينكدإن" target="_blank" rel="noopener noreferrer">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                        </svg>
-                    </a>
-                </div>
-
-                <!-- Mobile Hamburger -->
-                <button class="nav-hamburger" aria-label="فتح القائمة" aria-expanded="false" aria-controls="nav-menu">
+            <!-- RIGHT ACTIONS -->
+            <div class="nav-actions">
+                <button class="nav-hamburger" id="nav-hamburger"
+                        aria-label="<?php echo $lang === 'ar' ? 'فتح القائمة' : 'Open menu'; ?>"
+                        aria-expanded="false"
+                        aria-controls="nav-menu">
                     <span></span>
                     <span></span>
                     <span></span>
                 </button>
-
             </div>
 
         </nav>
